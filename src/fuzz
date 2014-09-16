@@ -16,28 +16,25 @@ flag ['custom-auth']
 #Create a discover file and include it 
 desc 'Output a comprehensive, human-readable list of all discovered inputs to the system. Techniques include both crawling and guessing.'
 command :discover do |c|
-  desc 'Newline-delimited file of common words to be used in page guessing and input guessing. Required.'
-  c.flag ['common-words']
+  desc 'Newline-delimited file of common words to be used in page guessing and input guessing.'
+  c.flag ['common-words'], :required => true
   
 
 
 end
 
 #Create a test file and include it
-#desc 'Discover all inputs, then attempt a list of exploit vectors on those inputs. Report potential vulnerabilities.'
-#command :test do |c|
+desc 'Discover all inputs, then attempt a list of exploit vectors on those inputs. Report potential vulnerabilities.'
+command :test do |c|
 
-  #desc 'Newline-delimited file of common exploits to vulnerabilities. Required.'
-  #c.flag ['vectors']
+  c.flag ['vectors'], :desc =>'Newline-delimited file of common exploits to vulnerabilities.', :required => true
 
-  #desc 'Newline-delimited file data that should never be leaked. Its assumed that this data is in the applications database (e.g. test data), but is not reported in any response. Required'
-  #c.flag ['sensitive']
+  c.flag ['sensitive'], :desc => 'Newline-delimited file data that should never be leaked. Its assumed that this data is in the applications database (e.g. test data), but is not reported in any response.', :required => true
 
-  #desc 'When off, try each input to each page systematically.  When on, choose a random page, then a random input field and test all vectors. Default: false.'
-  #c.flag ['random']
+  c.flag ['random'], :desc => 'When off, try each input to each page systematically.  When on, choose a random page, then a random input field and test all vectors.', :default => false
 
-  #desc ' Number of milliseconds considered when a response is considered "slow". Default is 500 milliseconds'
-  #c.flag ['slow']
-#end
+  c.flag ['slow'], :desc => 'Number of milliseconds considered when a response is considered "slow". Default is 500 milliseconds'
+
+end
 
 exit run(ARGV)
