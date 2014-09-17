@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 
 require 'gli'
+load 'Commands/discover.rb'
 
 include GLI::App
 
@@ -22,8 +23,13 @@ command :discover do |c|
 
   #Where the disocver logic will get executed
   c.action do |global_options,options,args|
-  	 puts args
-	 puts options
+    #Check if args contains something
+
+    disocver = Discover.new(options['common-words'], args[0])
+
+
+  	#puts args
+	  #puts options
   end
 
 end
