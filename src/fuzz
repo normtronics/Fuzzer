@@ -12,12 +12,17 @@ flag ['custom-auth'], :arg_name => 'string', :required => false
 #Discover Command
 desc 'Output a comprehensive, human-readable list of all discovered inputs to the system. Techniques include both crawling and guessing.'
 command :discover do |c|
-  desc 'Newline-delimited file of common words to be used in page guessing and input guessing.'
-  c.flag ['common-words'], :required => true, :arg_name => 'file'
+	
+  #Common words flags, needs to be set by user in order for discover to work	
+  c.flag ['common-words'], 
+  :required => true, 
+  :arg_name => 'file', 
+  :desc => 'Newline-delimited file of common words to be used in page guessing and input guessing.'
+
 
   #Where the disocver logic will get executed
   c.action do |global_options,options,args|
-
+  	 puts args
 	 puts options
   end
 
@@ -27,17 +32,30 @@ end
 desc 'Discover all inputs, then attempt a list of exploit vectors on those inputs. Report potential vulnerabilities.'
 command :test do |c|
 
-  c.flag ['vectors'], :desc =>'Newline-delimited file of common exploits to vulnerabilities.', :required => true, :arg_name => 'file'
+  c.flag ['vectors'], 
+  :desc =>'Newline-delimited file of common exploits to vulnerabilities.', 
+  :required => true, 
+  :arg_name => 'file'
 
-  c.flag ['sensitive'], :desc => 'Newline-delimited file data that should never be leaked. Its assumed that this data is in the applications database (e.g. test data), but is not reported in any response.', :required => true, :arg_name => 'file'
+  c.flag ['sensitive'], 
+  :desc => 'Newline-delimited file data that should never be leaked. Its assumed that this data is in the applications database (e.g. test data), but is not reported in any response.', 
+  :required => true, 
+  :arg_name => 'file'
 
-  c.flag ['random'], :desc => 'When off, try each input to each page systematically.  When on, choose a random page, then a random input field and test all vectors.', :default_value => false, :arg_name => 'file'
+  c.flag ['random'], 
+  :desc => 'When off, try each input to each page systematically.  When on, choose a random page, then a random input field and test all vectors.', 
+  :default_value => false, 
+  :arg_name => 'file'
 
-  c.flag ['slow'], :desc => 'Number of milliseconds considered when a response is considered "slow". Default is 500 milliseconds', :default_value => 500, :arg_name => 500
+  c.flag ['slow'], 
+  :desc => 'Number of milliseconds considered when a response is considered "slow". Default is 500 milliseconds', 
+  :default_value => 500, 
+  :arg_name => 500
+
 
   #Where the test logic will be executed
   c.action do |global_options,options,args|
-
+  	 puts args
 	 puts options
   end
 
