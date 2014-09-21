@@ -1,0 +1,6 @@
+admin
+login
+yo
+slang
+profile
+edit
