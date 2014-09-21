@@ -62,9 +62,15 @@ class Discover
 	end
 
 	def pageGuess
+		puts '----------Now Guessing Pages--------------'
 		@commanArray.each do |word|
-			page = @agent.get(@base + '/' + word)
-			puts page
+			begin
+				url = @base + '/' + word
+				page = @agent.get(url)
+				puts 'Found page ' + url
+			rescue Mechanize::ResponseCodeError
+				puts 'Could not find page ' + url
+			end
 		end
 	end
 
