@@ -4,7 +4,6 @@ require 'uri'
 require 'http-cookie'
 
 
-
 class Discover
 
 	def initialize(commonWords, page)
@@ -12,6 +11,7 @@ class Discover
 		@agent = Mechanize.new
 		@page = page
 		@base = getBasePath(page)
+		@links = Array.new
 
 		puts @base
 
@@ -37,12 +37,21 @@ class Discover
 
 	def findLinks
 		page = @agent.get(@page)
-		pp page
-		linksArray = Array.new
-		page.links.each do |link|
-			linksArray.push(link)
-			puts( link.uri )
+		links = page.links
+		currPage = page
+		currIndex = 0
+		while 		do 
+			link = links[currIndex]
+			url = currPage.uri.merge link.href
+			currPage = @agent.get(url)
+			
 		end
+		
+		
+	end
+
+	def getURL( link )
+		return @base + link.href
 	end
 
 	def athenticate
@@ -63,20 +72,17 @@ class Discover
 	end
 
 	def pageGuess
-		puts '----------Now Guessing Pages--------------'
 		@commanArray.each do |word|
-			begin
-				url = @base + '/' + word
-				page = @agent.get(url)
-				puts 'Found page ' + url
-			rescue Mechanize::ResponseCodeError
-				puts 'Could not find page ' + url
-			end
+			page = @agent.get(@base + '/' + word)
+			puts page
 		end
 	end
 
-	def parseUrl
-
+	def parseUrl( page, inputs)
+	
+		page.uri.query.to_s.split('&').each do | input |
+			inputs.push input.split('=')[0]
+		end
 
 	end
 
@@ -107,6 +113,31 @@ def getLinks( page )
 		#puts( link.href ) 
 	end
 end
+
+def discoverInputs
+
+	@links.each do | l |
+		inputs = Array.new
+		page = @agent.get(l)
+		pp page
+		puts page.uri
+		forms = page.forms()
+		forms.each_with_index do | f | 
+			f.keys.each do | key | 
+				inputs.push( key )
+				f[key] = "input"
+			end
+			currPage = f.click_button
+			parseUrl(currPage, inputs)
+			if( not inputs.empty? )
+				puts "    " + inputs.uniq.to_s
+			end
+		end
+
+	end
+
+end
+
 
 def main()
 	agent = Mechanize.new
