@@ -10,10 +10,9 @@ class Discover
 		f = File.open(commonWords, "r")
 		@agent = Mechanize.new
 		@page = page
-		@base = getBasePath(page)
+		@base = ''
 		@links = Array.new
 
-		puts @base
 
 		begin
 			@commonArray = Array.new
@@ -31,30 +30,27 @@ class Discover
 
 		athenticate()
 		findLinks()
-		getFormParams()
-		puts getCookies()
+		#getFormParams()
+		#puts getCookies()
 	end
 	
-	def findLinks
-		page = @agent.get(@page)
-		allLinks = Array.new()
+	def findLinks page
+
 		page.links.each do |l|
-			allLinks.push(l.uri)
-		end
-		i = 0
-		while i < allLinks.size do
-			currPage = agent.get(allLinks[i])
-			currPage.links.each do |link|
-				if !allLinks.include?(link.uri)
-					allLinks.push(link.uri)
-				end
+			if l.href.to_s.include?'logout'
+				next
 			end
-			i+=1
+			currPage = l.click()
+			if not currPage.uri.host == @base
+				next
+			end
+			if not currPage.uri.to_s.include?'../' and not @links.include?currPage.uri 
+				@links.push currPage.uri
+				findLinks currPage
+			end
 		end
-		allLinks.each do |link|
-			link = page.uri.merge link
-		end
-	end	
+
+	end
 
 	def getURL( link )
 		return @base + link.href
@@ -138,61 +134,10 @@ class Discover
 end
 
 
-def getLinks(page)
-	agent = Mechanize.new
-	page = agent.get('http://127.0.0.1:8080/bodgeit/')
-	allLinks = Array.new()
-	page.links.each do |l|
-		allLinks.push(l.uri)
-	end
-	i = 0
-	while i < allLinks.size do
-		currPage = agent.get(allLinks[i])
-		currPage.links.each do |link|
-			if !allLinks.include?(link.uri)
-				allLinks.push(link.uri)
-			end
-		end
-		i+=1
-	end
-	urls = Array.new()
-	allLinks.each do |link|
-		urls.push(page.uri.merge link)
-	end
-	urls.each do |link|
-		puts link
-	end
-end	
-
-
 def main()
-	agent = Mechanize.new
-	page = agent.get('http://127.0.0.1/dvwa/login.php')
-	page = agent.get('http://127.0.0.1:8080/bodgeit/')
-	pp page
-
-	form = page.forms.first 
-
-	form['username'] = "admin"
-	form['password'] = "password"
-	page2 = form.click_button
-
-	pp page2
-
-	#might want to iterate through page to really check if its the same
-	if page2.title.eql?(page.title)
-		puts 'Login did not work'
-	end
-
-	getLinks(page)
-end
-
-def main2()
-	agent = Mechanize.new
-	page = agent.get('http://127.0.0.1:8080/bodgeit/')
-	getLinks(page)
+	discover = Discover.new( '../Test/common-words.txt', "http://127.0.0.1/dvwa/login.php")
+	discover.discoverInputs
 end
 
 
-
-#main
+#main()
