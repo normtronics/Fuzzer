@@ -34,21 +34,27 @@ class Discover
 		getFormParams()
 		puts getCookies()
 	end
-
+	
 	def findLinks
 		page = @agent.get(@page)
-		links = page.links
-		currPage = page
-		currIndex = 0
-		while 		do 
-			link = links[currIndex]
-			url = currPage.uri.merge link.href
-			currPage = @agent.get(url)
-			
+		allLinks = Array.new()
+		page.links.each do |l|
+			allLinks.push(l.uri)
 		end
-		
-		
-	end
+		i = 0
+		while i < allLinks.size do
+			currPage = agent.get(allLinks[i])
+			currPage.links.each do |link|
+				if !allLinks.include?(link.uri)
+					allLinks.push(link.uri)
+				end
+			end
+			i+=1
+		end
+		allLinks.each do |link|
+			link = page.uri.merge link
+		end
+	end	
 
 	def getURL( link )
 		return @base + link.href
@@ -92,6 +98,28 @@ class Discover
 
 	end
 
+	def discoverInputs
+
+		@links.each do | l |
+			inputs = Array.new
+			page = @agent.get(l)
+			pp page
+			puts page.uri
+			forms = page.forms()
+			forms.each_with_index do | f | 
+				f.keys.each do | key | 
+					inputs.push( key )
+					f[key] = "input"
+				end
+				currPage = f.click_button
+				parseUrl(currPage, inputs)
+				if( not inputs.empty? )
+					puts "    " + inputs.uniq.to_s
+				end
+			end
+		end
+
+	end
 
 	def getFormParams
 		page = @agent.get(@pages)
@@ -110,44 +138,37 @@ class Discover
 end
 
 
-
-def getLinks( page )
-	puts("Link: ")
-	page.links.each do |link|
-		array.push(link)
-		puts( link.text )
-		#puts( link.href ) 
+def getLinks(page)
+	agent = Mechanize.new
+	page = agent.get('http://127.0.0.1:8080/bodgeit/')
+	allLinks = Array.new()
+	page.links.each do |l|
+		allLinks.push(l.uri)
 	end
-end
-
-def discoverInputs
-
-	@links.each do | l |
-		inputs = Array.new
-		page = @agent.get(l)
-		pp page
-		puts page.uri
-		forms = page.forms()
-		forms.each_with_index do | f | 
-			f.keys.each do | key | 
-				inputs.push( key )
-				f[key] = "input"
-			end
-			currPage = f.click_button
-			parseUrl(currPage, inputs)
-			if( not inputs.empty? )
-				puts "    " + inputs.uniq.to_s
+	i = 0
+	while i < allLinks.size do
+		currPage = agent.get(allLinks[i])
+		currPage.links.each do |link|
+			if !allLinks.include?(link.uri)
+				allLinks.push(link.uri)
 			end
 		end
-
+		i+=1
 	end
-
-end
+	urls = Array.new()
+	allLinks.each do |link|
+		urls.push(page.uri.merge link)
+	end
+	urls.each do |link|
+		puts link
+	end
+end	
 
 
 def main()
 	agent = Mechanize.new
-	page = agent.get('http://localhost:8888/dvwa/login.php')
+	page = agent.get('http://127.0.0.1/dvwa/login.php')
+	page = agent.get('http://127.0.0.1:8080/bodgeit/')
 	pp page
 
 	form = page.forms.first 
@@ -166,5 +187,12 @@ def main()
 	getLinks(page)
 end
 
+def main2()
+	agent = Mechanize.new
+	page = agent.get('http://127.0.0.1:8080/bodgeit/')
+	getLinks(page)
+end
 
-#main()
+
+
+#main
