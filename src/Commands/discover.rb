@@ -90,8 +90,18 @@ class Discover
 	end
 
 	def getBasePath(page)
-		uri = URI(page)
-		return "#{uri.scheme}://#{uri.host}"
+		uri = URI.parse(page.uri.to_s)
+		path = uri.path.split('/')
+		host = uri.host
+		path.delete("")
+		if path.last.include?(".")
+			path.pop
+		end
+		path.each do |p|
+			host = host + '/' + p
+		end
+		puts uri.scheme + '://' + host + '/'
+		return uri.scheme + '://' + host + '/'
 	end
 
 end
