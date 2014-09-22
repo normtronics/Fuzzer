@@ -9,11 +9,12 @@ class Discover
 	def initialize(commonWords, page)
 		f = File.open(commonWords, "r")
 		@agent = Mechanize.new
-		@page = page
-		@base = getBasePath(page)
-		@links = Array.new
+		@page = @agent.get(page)
+		@base = @page.uri.to_s
+		@links = findLinks
 
 		puts @base
+		puts @links
 
 		begin
 			@commonArray = Array.new
@@ -29,7 +30,8 @@ class Discover
 			raise
 		end	
 
-		athenticate()
+		
+		#authenticate()
 		findLinks()
 		getFormParams()
 		puts getCookies()
@@ -38,21 +40,41 @@ class Discover
 	def findLinks
 		page = @agent.get(@page)
 		allLinks = Array.new()
+		base = getBasePath(page.uri.to_s)
 		page.links.each do |l|
-			allLinks.push(l.uri)
+			begin
+				unless l.uri.to_s.downcase.include?("logout")
+					next_page = @agent.get(base.merge l.uri)
+					if next_page.uri.host.eql?(page.uri.host)
+						puts "GO: " + next_page.uri.to_s
+						allLinks.push(l.uri)
+					end
+				end
+			rescue Mechanize::ResponseCodeError
+				puts 'Could not find page'
+			end
 		end
 		i = 0
 		while i < allLinks.size do
-			currPage = agent.get(allLinks[i])
+			puts allLinks[i].to_s
+			currPage = @agent.get(base.merge allLinks[i])
 			currPage.links.each do |link|
-				if !allLinks.include?(link.uri)
-					allLinks.push(link.uri)
+				unless l.uri.to_s.downcase.include?("logout")
+					begin
+						check_page = @agent.get(base.merge link.uri)
+						if !allLinks.include?(link.uri)
+							allLinks.push(link.uri)
+						end
+					rescue Mechanize::ResponseCodeError
+						puts 'Could not find page'
+					end
 				end
 			end
 			i+=1
 		end
+		urls = Array.new()
 		allLinks.each do |link|
-			link = page.uri.merge link
+			urls.push(base.merge link)
 		end
 	end	
 
@@ -60,7 +82,7 @@ class Discover
 		return @base + link.href
 	end
 
-	def athenticate
+	def authenticate
 		page = @agent.get(@page)
 		form = page.forms.first 
 
@@ -79,7 +101,7 @@ class Discover
 
 	def pageGuess
 		puts '----------Now Guessing Pages--------------'
-		@commanArray.each do |word|
+		@commonArray.each do |word|
 			begin
 				url = @base + '/' + word
 				page = @agent.get(url)
@@ -131,8 +153,7 @@ class Discover
 	end
 
 	def getBasePath(page)
-		uri = URI(page)
-		return "#{uri.scheme}://#{uri.host}"
+		return URI(page)
 	end
 
 end
@@ -164,11 +185,9 @@ def getLinks(page)
 	end
 end	
 
-
 def main()
 	agent = Mechanize.new
 	page = agent.get('http://127.0.0.1/dvwa/login.php')
-	page = agent.get('http://127.0.0.1:8080/bodgeit/')
 	pp page
 
 	form = page.forms.first 
