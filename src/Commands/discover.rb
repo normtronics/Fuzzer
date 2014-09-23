@@ -67,19 +67,57 @@ class Discover
 	def athenticate
 		puts '------------Authenticating-------------'
 		page = @agent.get(@page)
-		form = page.forms.first 
+		
+		if page.uri.to_s.include?("dvwa")
+			form = page.forms.first 
 
-		form['username'] = "admin"
-		form['password'] = "password"
-		page2 = form.click_button
+			form['username'] = "admin"
+			form['password'] = "password"
+			page2 = form.click_button
 
-		#Might want to iterate through page to really check if its the same
-		if page2.title.eql?(page.title)
-			puts 'Login did not work'
-		else
-			puts 'Successfully logged in'
-			@page = page2
+			#Might want to iterate through page to really check if its the same
+			if page2.title.eql?(page.title)
+				puts 'Login did not work'
+			else
+				puts 'Successfully logged in'
+				@page = page2
+				@base = @page.uri.host
+			end
+		elsif page.uri.to_s.include?("bodgeit")
+		
+			link = page.link_with(text: 'Login')
+			page = link.click
+			link = page.link_with(text: 'Register')
+			page = link.click
+			
+			form = page.forms.first
+			form['username'] = "my@fuzz.com"
+			form['password1'] = "password"
+			form['password2'] = "password"
+			button = form.button_with(:value => "Register")
+			page = @agent.submit(form, button)
+			
+			if page.links.include?(page.link_with(text: 'Login'))
+				link = page.link_with(text: 'Login')
+				page = link.click
+				form = page.forms.first
+				form['username'] = "my@fuzz.com"
+				form['password'] = "password"
+				button = form.button_with(:value => "Login")
+				page = @agent.submit(form, button)
+			end
+			
+			link = page.link_with(text: 'Home')
+			@page = link.click
+			
+			if @page.links.include?(@page.link_with(text: 'Login'))
+				puts 'Login did not work'
+			else
+				puts 'Successfully logged in'
+			end
+			
 			@base = @page.uri.host
+			
 		end
 	end
 
@@ -115,7 +153,6 @@ class Discover
 			inputs = Array.new
 			page = @agent.get(l)
 			puts page.uri
-
 			forms = page.forms()
 			forms.each_with_index do | f | 
 				f.keys.each do | key | 
@@ -125,10 +162,8 @@ class Discover
 				currPage = f.click_button
 				parseUrl(currPage, inputs)
 			end
-
 			if( not page.at('input') == nil)
-				page.at('input').attributes.each do | a |
-
+				page.at('input').attributes.each do | a |		
 					if( a[1].value == 'text')
 						next
 					end
@@ -139,7 +174,6 @@ class Discover
 				puts "    " + inputs.uniq.to_s
 			end
 		end
-
 	end
 
 	def getCookies
