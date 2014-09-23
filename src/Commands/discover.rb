@@ -17,8 +17,8 @@ class Discover
 		begin
 			@commonArray = Array.new
 			f.each_line do |line|
-  				@commonArray.push(line)
-  				puts line
+  				@commonArray.push(line.chomp)
+  				#puts line
 			end
 			f.close
 		rescue SystemCallError
@@ -29,24 +29,32 @@ class Discover
 		end	
 
 		athenticate()
-		findLinks()
-		#getFormParams()
-		#puts getCookies()
+		puts '------------Finding Links-------------'
+		findLinks(@page)
+		pageGuess()
+		puts '------------Discovering Inputs-------------'
+		discoverInputs()
+		puts '-------------Getting Cookies---------------'
+		puts getCookies()
 	end
 	
-	def findLinks page
-
+	def findLinks(page)
 		page.links.each do |l|
 			if l.href.to_s.include?'logout'
 				next
 			end
-			currPage = l.click()
-			if not currPage.uri.host == @base
-				next
-			end
-			if not currPage.uri.to_s.include?'../' and not @links.include?currPage.uri 
-				@links.push currPage.uri
-				findLinks currPage
+			begin
+				currPage = l.click()
+				if not currPage.uri.host == @base
+					next
+				end
+				if not currPage.uri.to_s.include?'../' and not @links.include?currPage.uri 
+					puts 'Found link: ' + currPage.uri.to_s
+					@links.push currPage.uri
+					findLinks currPage
+				end
+			rescue Mechanize::ResponseCodeError
+
 			end
 		end
 
@@ -57,9 +65,9 @@ class Discover
 	end
 
 	def athenticate
+		puts '------------Authenticating-------------'
 		page = @agent.get(@page)
 		form = page.forms.first 
-
 
 		form['username'] = "admin"
 		form['password'] = "password"
@@ -69,19 +77,26 @@ class Discover
 		if page2.title.eql?(page.title)
 			puts 'Login did not work'
 		else
+			puts 'Successfully logged in'
 			@page = page2
+			@base = @page.uri.host
 		end
 	end
 
 	def pageGuess
-		puts '----------Now Guessing Pages--------------'
-		@commanArray.each do |word|
-			begin
-				url = @base + '/' + word
-				page = @agent.get(url)
-				puts 'Found page ' + url
-			rescue Mechanize::ResponseCodeError
-				puts 'Could not find page ' + url
+		puts '----------Guessing Pages--------------'
+		fileExtensions = ['.php', '.jsp', '.html', '.asp', '.apsx', '.js']
+		@commonArray.each do |word|
+			@links.each do |link|
+				fileExtensions.each do |ext|
+					begin
+						url = link.to_s + '/' + word + ext
+						page = @agent.get(url)
+						puts 'Found page: ' + url
+					rescue Mechanize::ResponseCodeError
+						#puts 'Could not find page: ' + url
+					end
+				end
 			end
 		end
 	end
@@ -99,7 +114,6 @@ class Discover
 		@links.each do | l |
 			inputs = Array.new
 			page = @agent.get(l)
-			pp page
 			puts page.uri
 			forms = page.forms()
 			forms.each_with_index do | f | 
@@ -117,27 +131,32 @@ class Discover
 
 	end
 
-	def getFormParams
-		page = @agent.get(@pages)
-		page.forms
-	end
-
 	def getCookies
 		return @agent.cookies.to_s
 	end
 
 	def getBasePath(page)
-		uri = URI(page)
-		return "#{uri.scheme}://#{uri.host}"
+		uri = URI.parse(page.uri.to_s)
+		path = uri.path.split('/')
+		host = uri.host
+		path.delete("")
+		if path.last.include?(".")
+			path.pop
+		end
+		path.each do |p|
+			host = host + '/' + p
+		end
+		#puts uri.scheme + '://' + host + '/'
+		return uri.scheme + '://' + host + '/'
 	end
 
 end
 
 
-def main()
-	discover = Discover.new( '../Test/common-words.txt', "http://127.0.0.1/dvwa/login.php")
-	discover.discoverInputs
-end
+#def main()
+	#discover = Discover.new( '../Test/common-words.txt', "http://127.0.0.1/dvwa/login.php")
+	#discover.discoverInputs
+#end
 
 
 #main()
