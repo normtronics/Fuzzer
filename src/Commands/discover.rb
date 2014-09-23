@@ -115,6 +115,7 @@ class Discover
 			inputs = Array.new
 			page = @agent.get(l)
 			puts page.uri
+
 			forms = page.forms()
 			forms.each_with_index do | f | 
 				f.keys.each do | key | 
@@ -123,9 +124,19 @@ class Discover
 				end
 				currPage = f.click_button
 				parseUrl(currPage, inputs)
-				if( not inputs.empty? )
-					puts "    " + inputs.uniq.to_s
+			end
+
+			if( not page.at('input') == nil)
+				page.at('input').attributes.each do | a |
+
+					if( a[1].value == 'text')
+						next
+					end
+					inputs.push a[1].value
 				end
+			end
+			if( not inputs.empty? )
+				puts "    " + inputs.uniq.to_s
 			end
 		end
 
