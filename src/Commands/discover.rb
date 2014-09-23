@@ -159,7 +159,11 @@ class Discover
 					inputs.push( key )
 					f[key] = "input"
 				end
-				currPage = f.click_button
+				begin
+					currPage = f.click_button
+				rescue Mechanize::ResponseCodeError
+					next	
+				end
 				parseUrl(currPage, inputs)
 			end
 			if( not page.at('input') == nil)
@@ -198,10 +202,10 @@ class Discover
 end
 
 
-#def main()
-	#discover = Discover.new( '../Test/common-words.txt', "http://127.0.0.1/dvwa/login.php")
-	#discover.discoverInputs
-#end
+def main()
+	discover = Discover.new( '../Test/common-words.txt', "http://127.0.0.1:8080/bodgeit/")
+	discover.discoverInputs
+end
 
 
-#main()
+main()
