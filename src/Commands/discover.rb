@@ -6,19 +6,24 @@ require 'http-cookie'
 
 class Discover
 
-	def initialize(commonWords, page)
+	def initialize(commonWords, uri)
 		f = File.open(commonWords, "r")
 		@agent = Mechanize.new
-		@page = page
-		@base = ''
-		@links = Array.new
+		@page = @agent.get(uri) 	#starting page
+		@base = @page.uri.host		#base of the uri
+		@links = Array.new 			#link uri
+		@auth = false;				# bool to prevent double auth
+
+		@urlInput = {}				#Hash map url --> uriInput Array
+		@vector = Array.new			#test input
 
 
+
+		# ------ Read common work text file
 		begin
 			@commonArray = Array.new
 			f.each_line do |line|
   				@commonArray.push(line.chomp)
-  				#puts line
 			end
 			f.close
 		rescue SystemCallError
@@ -28,7 +33,6 @@ class Discover
 			raise
 		end	
 
-		athenticate()
 		puts '------------Finding Links-------------'
 		findLinks(@page)
 		pageGuess()
@@ -37,37 +41,75 @@ class Discover
 		puts '-------------Getting Cookies---------------'
 		puts getCookies()
 	end
-	
+
+
 	def findLinks(page)
+		if page.uri.to_s.include?'login'
+			page = athenticate page
+		end
+
 		page.links.each do |l|
+			#Dont click on any logout link
 			if l.href.to_s.include?'logout'
 				next
 			end
 			begin
 				currPage = l.click()
-				if not currPage.uri.host == @base
+				if not currPage.uri.host == @base	#Dont crawl off the site
 					next
 				end
-				if not currPage.uri.to_s.include?'../' and not @links.include?currPage.uri 
-					puts 'Found link: ' + currPage.uri.to_s
-					@links.push currPage.uri
-					findLinks currPage
+				if currPage.uri.to_s.include? 'login' and !@auth # login screen
+					athenticate currPage
+				end
+				# no ../   
+				if not currPage.uri.to_s.include?'../'			
+					pUri = parseUrl currPage.uri
+					# not already visited
+					if not  @links.include?pUri 
+						puts 'Found link: ' + pUri.to_s
+						@links.push pUri
+						findLinks currPage
+					end
 				end
 			rescue Mechanize::ResponseCodeError
-
+				next
 			end
 		end
-
 	end
 
-	def getURL( link )
-		return @base + link.href
+	def pageGuess
+		puts '----------Guessing Pages--------------'
+		fileExtensions = ['.php', '.jsp', '.html', '.asp', '.apsx', '.js']
+		@commonArray.each do |word|
+			@links.each do |link|
+				fileExtensions.each do |ext|
+					begin
+						# removes the ext from the link before adding a new path
+						index = -1
+						i = 1
+						#checks ext up to 6 char long
+						while i < 7 do
+							curr = link.to_s[-i]
+							if curr == "."
+								index = -( i + 1)
+								break
+							end
+							i += 1
+						end
+						url = link.to_s[0 .. index] + '/' + word + ext
+						page = @agent.get(url)
+						puts 'Found page: ' + url
+					rescue Mechanize::ResponseCodeError
+						puts 'Could not find page: ' + url
+					end
+				end
+			end
+		end
 	end
 
-	def athenticate
+
+	def athenticate page
 		puts '------------Authenticating-------------'
-		page = @agent.get(@page)
-		
 		if page.uri.to_s.include?("dvwa")
 			form = page.forms.first 
 
@@ -75,18 +117,16 @@ class Discover
 			form['password'] = "password"
 			page2 = form.click_button
 
-			#Might want to iterate through page to really check if its the same
 			if page2.title.eql?(page.title)
 				puts 'Login did not work'
 			else
 				puts 'Successfully logged in'
-				@page = page2
-				@base = @page.uri.host
+				@auth = true;
 			end
+
+			return page2
+
 		elsif page.uri.to_s.include?("bodgeit")
-		
-			link = page.link_with(text: 'Login')
-			page = link.click
 			link = page.link_with(text: 'Register')
 			page = link.click
 			
@@ -108,41 +148,44 @@ class Discover
 			end
 			
 			link = page.link_with(text: 'Home')
-			@page = link.click
+			page = link.click
 			
-			if @page.links.include?(@page.link_with(text: 'Login'))
+			if page.links.include?(@page.link_with(text: 'Login'))
 				puts 'Login did not work'
 			else
 				puts 'Successfully logged in'
+				@auth = true;
 			end
 			
-			@base = @page.uri.host
-			
+			return page
 		end
+
 	end
 
-	def pageGuess
-		puts '----------Guessing Pages--------------'
-		fileExtensions = ['.php', '.jsp', '.html', '.asp', '.apsx', '.js']
-		@commonArray.each do |word|
-			@links.each do |link|
-				fileExtensions.each do |ext|
-					begin
-						url = link.to_s + '/' + word + ext
-						page = @agent.get(url)
-						puts 'Found page: ' + url
-					rescue Mechanize::ResponseCodeError
-						#puts 'Could not find page: ' + url
-					end
+
+
+	def parseUrl( uri )
+
+		if uri.query != nil
+
+			i = uri.to_s.index('?') - 1
+			key = uri.to_s[0..i]
+			if @urlInput[key] == nil
+				@urlInput[key] = Array.new
+			end
+
+			uri.query.split('&').each do | query |
+				# INPUT NAME
+				name = query.split('=')[0]
+				if not @urlInput[key].include? name
+					@urlInput[key].push name
 				end
 			end
-		end
-	end
-
-	def parseUrl( page, inputs)
-	
-		page.uri.query.to_s.split('&').each do | input |
-			inputs.push input.split('=')[0]
+			
+			
+			return URI(uri.to_s[0..i])
+		else
+			return URI(uri.to_s)
 		end
 
 	end
@@ -154,7 +197,7 @@ class Discover
 			page = @agent.get(l)
 			puts page.uri
 			forms = page.forms()
-			forms.each_with_index do | f | 
+			forms.each do | f | 
 				f.keys.each do | key | 
 					inputs.push( key )
 					f[key] = "input"
@@ -164,8 +207,8 @@ class Discover
 				rescue Mechanize::ResponseCodeError
 					next	
 				end
-				parseUrl(currPage, inputs)
 			end
+			# get inputs not in forms
 			if( not page.at('input') == nil)
 				page.at('input').attributes.each do | a |		
 					if( a[1].value == 'text')
@@ -174,6 +217,8 @@ class Discover
 					inputs.push a[1].value
 				end
 			end
+			# prints tab with inputs
+			# todo push to gobal struct
 			if( not inputs.empty? )
 				puts "    " + inputs.uniq.to_s
 			end
@@ -184,27 +229,111 @@ class Discover
 		return @agent.cookies.to_s
 	end
 
-	def getBasePath(page)
-		uri = URI.parse(page.uri.to_s)
-		path = uri.path.split('/')
-		host = uri.host
-		path.delete("")
-		if path.last.include?(".")
-			path.pop
+	def readVector( filename )
+
+		f = File.open(filename, "r")
+		# ------ Read vector test input text file
+		begin
+			@vector = Array.new
+			f.each_line do |line|
+  				@vector.push(line.chomp)
+			end
+			f.close
+		rescue SystemCallError
+			puts 'IO Failed. Check file path'
+			f.close
+			File.delete(filename)
+			raise
+		end	
+
+	end
+
+	def test()
+
+		puts '----------------- Tests -------------------'
+		puts @urlInput
+		#triple loop 
+		@vector.each do | input | 
+			@links.each do | l | 
+				currPage = @agent.get(l)
+
+				#try form input
+				found = false
+				currPage.forms().each do | f |
+					f.keys.each do | key |
+						if found #prevents double recording vunerability on the same page 
+							next
+						end
+						f[key] = input
+						works = true
+						#check for DOS
+						t1 = Time.now
+						begin
+							currPage = f.click_button
+						rescue Mechanize::ResponseCodeError
+							#HTTP response codes. 
+							#If the HTTP response code is not OK (i.e. 200), then something went wrong. Report it.
+							#TODO 
+							#idk how to get http code form responseCodeError
+							# puts currPage.uri.path + " Failed  with " + input
+							found = true
+							works = false
+						end
+						t2 = Time.now
+
+						if( works )
+							responseTime = t2 - t1
+							if responseTime > 0.5
+								puts "Possible DOS on " + currPage.uri.path + " with " + input
+								found = true
+							end
+						end
+					end
+				end
+
+				# try url
+				key = l.to_s
+				if @urlInput[key] != nil
+					#test url input
+					currLink = key + '&'
+					@urlInput[key].each_with_index do | urlInputName, index| 
+						currLink = currLink + urlInputName + '=' + input
+						if index != @urlInput[key].length - 1
+							currLink = currLink + '&'
+						end
+					end
+					#check for DOS
+					works = true
+					t1 = Time.now
+					begin
+						currPage = @agent.get currLink
+					rescue Mechanize::ResponseCodeError
+						#HTTP response codes. 
+						#If the HTTP response code is not OK (i.e. 200), then something went wrong. Report it.
+						#TODO 
+						#idk how to get http code form responseCodeError
+						works = false
+					end
+					t2 = Time.now
+					if( works )
+						responseTime = t2 - t1
+						if responseTime > 0.5
+							puts "Possible DOS on " + currPage.uri.path + " with " + input
+						end
+					end
+				end
+
+			end
 		end
-		path.each do |p|
-			host = host + '/' + p
-		end
-		#puts uri.scheme + '://' + host + '/'
-		return uri.scheme + '://' + host + '/'
+
 	end
 
 end
 
-
 def main()
-	discover = Discover.new( '../Test/common-words.txt', "http://127.0.0.1:8080/bodgeit/")
-	discover.discoverInputs
+	discover = Discover.new( 'common-words.txt', "http://127.0.0.1/dvwa/login.php")
+	discover.readVector('vectors.txt')
+	discover.test()
 end
 
 
