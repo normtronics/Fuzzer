@@ -337,12 +337,46 @@ class Discover
 
 	end
 
+	def sanitizationCheck 
+		sanTest = '<WESTSIDETILLIDIEEASTSIDECONNECTION>'
+		@links.each do |l|
+			page = @agent.get(l)
+			forms = page.forms()
+			forms.each do |form|
+				inputs = form.fields
+				inputs.each do |input|
+					input.value = sanTest;
+					#puts input.value
+				end
+
+				begin
+					currPage = form.click_button
+					#pp currPage.body
+
+					if currPage.body.to_s.include?('&amp;lt;WESTSIDETILLIDIEEASTSIDECONNECTION&amp;gt;')
+						puts 'Found'
+					elsif currPage.body.to_s.include?('<WESTSIDETILLIDIEEASTSIDECONNECTION>')
+						puts 'There is a sanitization error'
+					else
+						puts 'Nothing Found, Can not tell'
+					end 
+
+				rescue Mechanize::ResponseCodeError => e
+					puts 'Response code error: ' + e.response_code 
+					next	
+				end
+			end
+		end
+
+	end
+
 end
 
+
 def main()
-	discover = Discover.new( 'common-words.txt', "http://127.0.0.1:8080/bodgeit/")
-	discover.readVector('vectors.txt')
-	discover.test()
+	discover = Discover.new( '../Test/common-words.txt', "http://127.0.0.1:81/dvwa/login.php")
+	discover.readVector('../Test/vectors.txt')
+	discover.sanitizationCheck()
 end
 
 
