@@ -48,6 +48,10 @@ class Discover
 			page = athenticate page
 		end
 
+		if page == nil or page.links == nil
+			return 
+		end
+
 		page.links.each do |l|
 			#Dont click on any logout link
 			if l.href.to_s.include?'logout'
@@ -72,6 +76,8 @@ class Discover
 					end
 				end
 			rescue Mechanize::ResponseCodeError
+				next
+			rescue Mechanize::ResponseReadError
 				next
 			end
 		end
@@ -100,7 +106,7 @@ class Discover
 						page = @agent.get(url)
 						puts 'Found page: ' + url
 					rescue Mechanize::ResponseCodeError
-						puts 'Could not find page: ' + url
+						# puts 'Could not find page: ' + url  
 					end
 				end
 			end
@@ -270,12 +276,11 @@ class Discover
 						t1 = Time.now
 						begin
 							currPage = f.click_button
-						rescue Mechanize::ResponseCodeError
+						rescue Mechanize::ResponseCodeError => e
 							#HTTP response codes. 
 							#If the HTTP response code is not OK (i.e. 200), then something went wrong. Report it.
-							#TODO 
-							#idk how to get http code form responseCodeError
-							# puts currPage.uri.path + " Failed  with " + input
+							puts currPage.uri.path + " Failed  with " + input
+							puts 'HTTP Response Code : ' + e.response_code
 							found = true
 							works = false
 						end
@@ -307,15 +312,19 @@ class Discover
 					t1 = Time.now
 					begin
 						currPage = @agent.get currLink
-					rescue Mechanize::ResponseCodeError
+					rescue Mechanize::ResponseCodeError => e
 						#HTTP response codes. 
 						#If the HTTP response code is not OK (i.e. 200), then something went wrong. Report it.
-						#TODO 
-						#idk how to get http code form responseCodeError
+
+						# if currPage.uri.query != nil
+						# 	puts currPage.uri.path + '?' + currPage.uri.query + " Failed"
+						# end
+						# puts currPage.uri.path + " Failed  with " + input
+						# puts 'HTTP Response Code : ' + e.response_code
 						works = false
 					end
 					t2 = Time.now
-					if( works )
+					if( works and not found )
 						responseTime = t2 - t1
 						if responseTime > 0.5
 							puts "Possible DOS on " + currPage.uri.path + " with " + input
@@ -331,7 +340,7 @@ class Discover
 end
 
 def main()
-	discover = Discover.new( 'common-words.txt', "http://127.0.0.1/dvwa/login.php")
+	discover = Discover.new( 'common-words.txt', "http://127.0.0.1:8080/bodgeit/")
 	discover.readVector('vectors.txt')
 	discover.test()
 end
