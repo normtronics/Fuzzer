@@ -16,7 +16,7 @@ class Discover
 
 		@urlInput = {}				#Hash map url --> uriInput Array
 		@vector = Array.new			#test input
-
+		@report = {}
 
 
 		# ------ Read common work text file
@@ -162,7 +162,7 @@ class Discover
 				puts 'Successfully logged in'
 				@auth = true;
 			end
-			
+
 			return page
 		end
 
@@ -188,7 +188,6 @@ class Discover
 				end
 			end
 			
-			
 			return URI(uri.to_s[0..i])
 		else
 			return URI(uri.to_s)
@@ -197,7 +196,6 @@ class Discover
 	end
 
 	def discoverInputs
-
 		@links.each do | l |
 			inputs = Array.new
 			page = @agent.get(l)
@@ -257,7 +255,6 @@ class Discover
 	def test()
 
 		puts '----------------- Tests -------------------'
-		puts @urlInput
 		#triple loop 
 		@vector.each do | input | 
 			@links.each do | l | 
@@ -279,8 +276,7 @@ class Discover
 						rescue Mechanize::ResponseCodeError => e
 							#HTTP response codes. 
 							#If the HTTP response code is not OK (i.e. 200), then something went wrong. Report it.
-							puts currPage.uri.path + " Failed  with " + input
-							puts 'HTTP Response Code : ' + e.response_code
+							report currPage, 'HTTP Response Code : ' + e.response_code
 							found = true
 							works = false
 						end
@@ -289,8 +285,11 @@ class Discover
 						if( works )
 							responseTime = t2 - t1
 							if responseTime > 0.5
-								puts "Possible DOS on " + currPage.uri.path + " with " + input
+								report currPage, "Possible DOS"
 								found = true
+							end
+							if dataLeaked currPage
+								report currPage, "Sensitive data leaked"
 							end
 						end
 					end
@@ -321,13 +320,17 @@ class Discover
 						# end
 						# puts currPage.uri.path + " Failed  with " + input
 						# puts 'HTTP Response Code : ' + e.response_code
+						report currPage, 'HTTP Response Code : ' + e.response_code
 						works = false
 					end
 					t2 = Time.now
 					if( works and not found )
 						responseTime = t2 - t1
 						if responseTime > 0.5
-							puts "Possible DOS on " + currPage.uri.path + " with " + input
+							report currPage, "Possible DOS"
+						end
+						if dataLeaked currPage
+							report currPage, "Sensitive data leaked"
 						end
 					end
 				end
@@ -336,6 +339,7 @@ class Discover
 		end
 
 	end
+
 
 	def sanitizationCheck 
 		sanTest = '<WESTSIDETILLIDIEEASTSIDECONNECTION>'
@@ -353,16 +357,16 @@ class Discover
 					currPage = form.click_button
 					#pp currPage.body
 
-					if currPage.body.to_s.include?('&amp;lt;WESTSIDETILLIDIEEASTSIDECONNECTION&amp;gt;')
-						puts 'Found'
+					if currPage.body.to_s.include?('&amplt;WESTSIDETILLIDIEEASTSIDECONNECTION&amp;gt;')
+						# report currPage "Lack of sanitization"
 					elsif currPage.body.to_s.include?('<WESTSIDETILLIDIEEASTSIDECONNECTION>')
-						puts 'There is a sanitization error'
+						report currPage, "Lack of sanitization"
 					else
-						puts 'Nothing Found, Can not tell'
+						# puts 'Nothing Found, Can not tell'
 					end 
 
 				rescue Mechanize::ResponseCodeError => e
-					puts 'Response code error: ' + e.response_code 
+					report currPage, 'HTTP Response Code : ' + e.response_code
 					next	
 				end
 			end
@@ -370,13 +374,44 @@ class Discover
 
 	end
 
+	def report page, rpt
+		if page == nil or page.uri == nil
+			return
+		end
+		key = page.uri.path 
+		if @report[key] == nil
+			@report[key] = Array.new
+		end
+		if not @report[key].include? rpt
+			@report[key].push rpt
+		end
+	end
+
+	def printReport
+		@report.keys.each do |key| 
+			puts 'Page: ' + key
+			puts '        ' +  @report[key].to_s
+		end
+	end
+
+	# James
+	# This function takes a page and parses it for sensitive data 
+	# use page.body.to_s to get the html string
+	# look for anything that looks like SQL 
+	def dataLeaked page
+
+		return false
+	end
+
 end
 
-
 def main()
-	discover = Discover.new( '../Test/common-words.txt', "http://127.0.0.1:81/dvwa/login.php")
-	discover.readVector('../Test/vectors.txt')
+	#discover = Discover.new( 'common-words.txt', "http://127.0.0.1/dvwa/login.php")
+	discover = Discover.new( 'common-words.txt', "http://127.0.0.1:8080/bodgeit/")
+	discover.readVector('vectors.txt')
+	discover.test()
 	discover.sanitizationCheck()
+	discover.printReport
 end
 
 
