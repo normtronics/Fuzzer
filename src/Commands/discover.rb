@@ -288,7 +288,7 @@ class Discover
 								report currPage, "Possible DOS"
 								found = true
 							end
-							if dataLeaked currPage
+							if dataLeaked currPage, 'sensitive.txt'
 								report currPage, "Sensitive data leaked"
 							end
 						end
@@ -329,7 +329,7 @@ class Discover
 						if responseTime > 0.5
 							report currPage, "Possible DOS"
 						end
-						if dataLeaked currPage
+						if dataLeaked currPage, 'sensitive.txt'
 							report currPage, "Sensitive data leaked"
 						end
 					end
@@ -398,8 +398,13 @@ class Discover
 	# This function takes a page and parses it for sensitive data 
 	# use page.body.to_s to get the html string
 	# look for anything that looks like SQL 
-	def dataLeaked page
-
+	def dataLeaked page, fileName
+		f = File.open(fileName, "r")
+		f.each do |line|
+			if page.body.to_s.include?(line.strip)
+				return true
+			end
+		end
 		return false
 	end
 
