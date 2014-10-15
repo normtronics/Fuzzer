@@ -4,10 +4,9 @@ require 'uri'
 require 'http-cookie'
 
 
-class Discover
+class Fuzzer
 
-	def initialize(commonWords, uri)
-		f = File.open(commonWords, "r")
+	def initialize(uri)
 		@agent = Mechanize.new
 		@page = @agent.get(uri) 	#starting page
 		@base = @page.uri.host		#base of the uri
@@ -18,6 +17,11 @@ class Discover
 		@vector = Array.new			#test input
 		@report = {}
 
+	end
+
+
+	def discover(commonWordsFile)
+		f = File.open(commonWordsFile, "r")
 
 		# ------ Read common work text file
 		begin
@@ -32,18 +36,26 @@ class Discover
 			File.delete(commonWords)
 			raise
 		end	
-
 		puts '------------Finding Links-------------'
 		findLinks(@page)
 		pageGuess()
-		puts '------------Discovering Inputs-------------'
 		discoverInputs()
-		puts '-------------Getting Cookies---------------'
 		puts getCookies()
 	end
 
 
+	def testDiscover(vectorFile, sensitiveDataFile)
+		@sensitiveDataFile = sensitiveDataFile
+		readVector(vectorFile)
+		test()
+	 	sanitizationCheck()
+	 	#dataLeaked(@page, sensitiveDataFile)
+		printReport()
+	end
+
+
 	def findLinks(page)
+
 		if page.uri.to_s.include?'login'
 			page = athenticate page
 		end
@@ -196,6 +208,7 @@ class Discover
 	end
 
 	def discoverInputs
+		puts '------------Discovering Inputs-------------'
 		@links.each do | l |
 			inputs = Array.new
 			page = @agent.get(l)
@@ -230,6 +243,7 @@ class Discover
 	end
 
 	def getCookies
+		puts '-------------Getting Cookies---------------'
 		return @agent.cookies.to_s
 	end
 
@@ -288,7 +302,7 @@ class Discover
 								report currPage, "Possible DOS"
 								found = true
 							end
-							if dataLeaked currPage, 'sensitive.txt'
+							if dataLeaked currPage, @sensitiveDataFile
 								report currPage, "Sensitive data leaked"
 							end
 						end
@@ -329,7 +343,7 @@ class Discover
 						if responseTime > 0.5
 							report currPage, "Possible DOS"
 						end
-						if dataLeaked currPage, 'sensitive.txt'
+						if dataLeaked currPage, @sensitiveDataFile
 							report currPage, "Sensitive data leaked"
 						end
 					end
@@ -358,6 +372,7 @@ class Discover
 					#pp currPage.body
 
 					if currPage.body.to_s.include?('&amplt;WESTSIDETILLIDIEEASTSIDECONNECTION&amp;gt;')
+					elsif currPage.body.to_s.include?('lt;WESTSIDETILLIDIEEASTSIDECONNECTION&amp;gt;')
 						# report currPage "Lack of sanitization"
 					elsif currPage.body.to_s.include?('<WESTSIDETILLIDIEEASTSIDECONNECTION>')
 						report currPage, "Lack of sanitization"
@@ -398,7 +413,7 @@ class Discover
 	# This function takes a page and parses it for sensitive data 
 	# use page.body.to_s to get the html string
 	# look for anything that looks like SQL 
-	def dataLeaked page, fileName
+	def dataLeaked(page, fileName)
 		f = File.open(fileName, "r")
 		f.each do |line|
 			if page.body.to_s.include?(line.strip)
@@ -420,4 +435,4 @@ def main()
 end
 
 
-main()
+#main()

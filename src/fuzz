@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 
 require 'gli'
-load 'src/Commands/discover.rb'
+load 'Commands/discover.rb'
 
 include GLI::App
 
@@ -23,9 +23,8 @@ command :discover do |c|
 
   #Where the disocver logic will get executed
   c.action do |global_options,options,args|
-    disocver = Discover.new(options['common-words'], args[0])
-    #puts args
-	 #puts options
+    @fuzzer = Fuzzer.new(args[0])
+    @fuzzer.discover(options['common-words'])
   end
 
 end
@@ -54,11 +53,17 @@ command :test do |c|
   :default_value => 500, 
   :arg_name => 500
 
+  c.flag ['common-words'], 
+  :required => true, 
+  :arg_name => 'file', 
+  :desc => 'Newline-delimited file of common words to be used in page guessing and input guessing.'
+
 
   #Where the test logic will be executed
   c.action do |global_options,options,args|
-  	 puts args
-	 puts options
+     @fuzzer = Fuzzer.new(args[0])
+     @fuzzer.discover(options['common-words'])
+  	 @fuzzer.testDiscover(options['vectors'], options['sensitive'])
   end
 
 end
