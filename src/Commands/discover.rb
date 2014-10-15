@@ -11,14 +11,16 @@ class Fuzzer
 		@page = @agent.get(uri) 	#starting page
 		@base = @page.uri.host		#base of the uri
 		@links = Array.new 			#link uri
-		@auth = false;				# bool to prevent double auth
+		@auth = false				# bool to prevent double auth
 
 		@urlInput = {}				#Hash map url --> uriInput Array
 		@vector = Array.new			#test input
 		@report = {}
 
-	end
+		@random = false
+		@slow = 0.5
 
+	end
 
 	def discover(commonWordsFile)
 		f = File.open(commonWordsFile, "r")
@@ -44,11 +46,19 @@ class Fuzzer
 	end
 
 
-	def testDiscover(vectorFile, sensitiveDataFile)
+	def testDiscover(vectorFile, sensitiveDataFile, random, slow)
 		@sensitiveDataFile = sensitiveDataFile
+		@random = random
+		@slow = slow
 		readVector(vectorFile)
-		test()
-	 	sanitizationCheck()
+		if( @random )
+			randomTest()
+			sanitizationCheck()
+		else
+			test()
+		 	sanitizationCheck()
+		end
+
 	 	#dataLeaked(@page, sensitiveDataFile)
 		printReport()
 	end
@@ -266,6 +276,90 @@ class Fuzzer
 
 	end
 
+	def randomTest()
+
+		puts '-------------- Random Tests ----------------'
+
+		#pick random page 
+		@randomLink = @links[ Random.rand @links.length ]
+		page = @agent.get(@randomLink)
+
+		# get a random page with a form
+		while page.forms().length == 0
+			@randomLink = @links[ Random.rand @links.length ]
+			page = @agent.get(@randomLink)
+		end
+
+		puts "The Random Page is: " + @randomLink.to_s
+		forms = page.forms();
+		randomForm = forms[ Random.rand forms.length ]
+
+
+		@vector.each do | input |
+
+			#each input in the random form
+			randomForm.keys.each do |key|
+				randomForm[key] = input
+				works = true
+				t1 = Time.now
+				begin
+					currPage = randomForm.click_button
+				rescue Mechanize::ResponseCodeError => e
+					#HTTP response codes. 
+					#If the HTTP response code is not OK (i.e. 200), then something went wrong. Report it.
+					report currPage, 'HTTP Response Code : ' + e.response_code
+					works = false
+				end
+				t2 = Time.now
+
+				if( works )
+					responseTime = t2 - t1
+					if responseTime > @slow
+						report currPage, "Possible DOS"
+					end
+					if dataLeaked currPage
+						report currPage, "Sensitive data leaked"
+					end
+				end
+			end
+
+			key = @randomLink.to_s
+			if @urlInput[key] != nil
+				#test url input
+				currLink = key + '&'
+				@urlInput[key].each_with_index do | urlInputName, index| 
+					currLink = currLink + urlInputName + '=' + input
+					if index != @urlInput[key].length - 1
+						currLink = currLink + '&'
+					end
+				end
+				#check for DOS
+				works = true
+				t1 = Time.now
+				begin
+					currPage = @agent.get currLink
+				rescue Mechanize::ResponseCodeError => e
+					#HTTP response codes. 
+					#If the HTTP response code is not OK (i.e. 200), then something went wrong. Report it.
+					report currPage, 'HTTP Response Code : ' + e.response_code
+					works = false
+				end
+				t2 = Time.now
+				if( works )
+					responseTime = t2 - t1
+					if responseTime > @slow
+						report currPage, "Possible DOS"
+					end
+					if dataLeaked currPage
+						report currPage, "Sensitive data leaked"
+					end
+				end
+			end
+		end
+
+
+	end
+
 	def test()
 
 		puts '----------------- Tests -------------------'
@@ -298,11 +392,11 @@ class Fuzzer
 
 						if( works )
 							responseTime = t2 - t1
-							if responseTime > 0.5
+							if responseTime > @slow
 								report currPage, "Possible DOS"
 								found = true
 							end
-							if dataLeaked currPage, @sensitiveDataFile
+							if dataLeaked currPage
 								report currPage, "Sensitive data leaked"
 							end
 						end
@@ -340,10 +434,10 @@ class Fuzzer
 					t2 = Time.now
 					if( works and not found )
 						responseTime = t2 - t1
-						if responseTime > 0.5
+						if responseTime > @slow
 							report currPage, "Possible DOS"
 						end
-						if dataLeaked currPage, @sensitiveDataFile
+						if dataLeaked currPage
 							report currPage, "Sensitive data leaked"
 						end
 					end
@@ -357,9 +451,11 @@ class Fuzzer
 
 	def sanitizationCheck 
 		sanTest = '<WESTSIDETILLIDIEEASTSIDECONNECTION>'
-		@links.each do |l|
-			page = @agent.get(l)
+
+		if @random
+			page = @agent.get(@randomLink)
 			forms = page.forms()
+
 			forms.each do |form|
 				inputs = form.fields
 				inputs.each do |input|
@@ -383,6 +479,37 @@ class Fuzzer
 				rescue Mechanize::ResponseCodeError => e
 					report currPage, 'HTTP Response Code : ' + e.response_code
 					next	
+				end
+			end
+		else
+
+			@links.each do |l|
+				page = @agent.get(l)
+				forms = page.forms()
+				forms.each do |form|
+					inputs = form.fields
+					inputs.each do |input|
+						input.value = sanTest;
+						#puts input.value
+					end
+
+					begin
+						currPage = form.click_button
+						#pp currPage.body
+
+						if currPage.body.to_s.include?('&amplt;WESTSIDETILLIDIEEASTSIDECONNECTION&amp;gt;')
+						elsif currPage.body.to_s.include?('lt;WESTSIDETILLIDIEEASTSIDECONNECTION&amp;gt;')
+							# report currPage "Lack of sanitization"
+						elsif currPage.body.to_s.include?('<WESTSIDETILLIDIEEASTSIDECONNECTION>')
+							report currPage, "Lack of sanitization"
+						else
+							# puts 'Nothing Found, Can not tell'
+						end 
+
+					rescue Mechanize::ResponseCodeError => e
+						report currPage, 'HTTP Response Code : ' + e.response_code
+						next	
+					end
 				end
 			end
 		end
@@ -413,8 +540,9 @@ class Fuzzer
 	# This function takes a page and parses it for sensitive data 
 	# use page.body.to_s to get the html string
 	# look for anything that looks like SQL 
-	def dataLeaked(page, fileName)
-		f = File.open(fileName, "r")
+	def dataLeaked(page)
+
+		f = File.open(@sensitiveDataFile, "r")
 		f.each do |line|
 			if page.body.to_s.include?(line.strip)
 				return true
@@ -426,13 +554,11 @@ class Fuzzer
 end
 
 def main()
-	#discover = Discover.new( 'common-words.txt', "http://127.0.0.1/dvwa/login.php")
-	discover = Discover.new( 'common-words.txt', "http://127.0.0.1:8080/bodgeit/")
-	discover.readVector('vectors.txt')
-	discover.test()
-	discover.sanitizationCheck()
-	discover.printReport
+	discover = Fuzzer.new( "http://127.0.0.1/dvwa/login.php")
+	# discover = Fuzzer.new("http://127.0.0.1:8080/bodgeit/")
+	discover.discover('common-words.txt')
+	discover.testDiscover('vectors.txt', 'sensitive-data.txt', true, 0.5)
 end
 
 
-#main()
+# main()
